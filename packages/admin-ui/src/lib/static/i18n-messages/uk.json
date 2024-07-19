@@ -325,7 +325,7 @@
     "select-display-language": "Виберіть мову відображення",
     "select-items-with-count": "Вибрати { count } {count, plural, one {елемент} few {елементи} other {елементів}}",
     "select-products": "Вибрати продукти",
-    "select-relation-id": "Вибрати повізаний ID",
+    "select-relation-id": "Вибрати пов'язаний ID",
     "select-table-columns": "Вибрати стовпці таблиці",
     "select-today": "Виберіть сьогодні",
     "select-variants": "Вибрати варіанти",
