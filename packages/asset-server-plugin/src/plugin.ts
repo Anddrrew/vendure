@@ -18,6 +18,7 @@ import { getValidFormat } from './common';
 import { DEFAULT_CACHE_HEADER, loggerCtx } from './constants';
 import { defaultAssetStorageStrategyFactory } from './default-asset-storage-strategy-factory';
 import { HashedAssetNamingStrategy } from './hashed-asset-naming-strategy';
+import { S3AssetStorageStrategy } from './s3-asset-storage-strategy';
 import { SharpAssetPreviewStrategy } from './sharp-asset-preview-strategy';
 import { transformImage } from './transform-image';
 import { AssetServerOptions, ImageTransformPreset } from './types';
@@ -281,7 +282,7 @@ export class AssetServerPlugin implements NestModule, OnApplicationBootstrap {
         return async (err: any, req: Request, res: Response, next: NextFunction) => {
             if (err && (err.status === 404 || err.statusCode === 404)) {
                 if (req.query) {
-                    const decodedReqPath = decodeURIComponent(req.path);
+                    const decodedReqPath = this.sanitizeFilePath(req.path);
                     Logger.debug(`Pre-cached Asset not found: ${decodedReqPath}`, loggerCtx);
                     let file: Buffer;
                     try {
@@ -310,8 +311,8 @@ export class AssetServerPlugin implements NestModule, OnApplicationBootstrap {
                         res.send(imageBuffer);
                         return;
                     } catch (e: any) {
-                        Logger.error(e, loggerCtx, e.stack);
-                        res.status(500).send(e.message);
+                        Logger.error(e.message, loggerCtx, e.stack);
+                        res.status(500).send('An error occurred when generating the image');
                         return;
                     }
                 }
@@ -347,14 +348,33 @@ export class AssetServerPlugin implements NestModule, OnApplicationBootstrap {
             imageParamsString += quality;
         }
 
-        /* eslint-enable @typescript-eslint/restrict-template-expressions */
-
-        const decodedReqPath = decodeURIComponent(req.path);
+        const decodedReqPath = this.sanitizeFilePath(req.path);
         if (imageParamsString !== '') {
             const imageParamHash = this.md5(imageParamsString);
             return path.join(this.cacheDir, this.addSuffix(decodedReqPath, imageParamHash, imageFormat));
         } else {
             return decodedReqPath;
+        }
+    }
+
+    /**
+     * Sanitize the file path to prevent directory traversal attacks.
+     */
+    private sanitizeFilePath(filePath: string): string {
+        let decodedPath: string;
+        try {
+            decodedPath = decodeURIComponent(filePath);
+        } catch (e: any) {
+            Logger.error((e.message as string) + ': ' + filePath, loggerCtx);
+            return '';
+        }
+        if (!(AssetServerPlugin.assetStorage instanceof S3AssetStorageStrategy)) {
+            // For S3 storage, we don't need to sanitize the path because
+            // directory traversal attacks are not possible, and modifying the
+            // path in this way can s3 files to be not found.
+            return path.normalize(decodedPath).replace(/(\.\.[\/\\])+/, '');
+        } else {
+            return decodedPath;
         }
     }
 
